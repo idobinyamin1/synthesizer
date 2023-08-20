@@ -1,0 +1,174 @@
+import logging
+import operator
+
+from z3 import Int, ForAll, Implies, Not, And, Or, Solver, unsat
+
+from adt.tree import Tree
+from while_lang.syntax import WhileParser
+
+logging.basicConfig(level=logging.DEBUG)
+
+from z3 import *
+
+OP = {'+': operator.add, '-': operator.sub,
+      '*': operator.mul, '/': operator.floordiv,
+      '!=': operator.ne, '>': operator.gt, '<': operator.lt,
+      '<=': operator.le, '>=': operator.ge, '=': operator.eq}
+
+
+def mk_env(pvars):
+    return {v: Int(v) for v in pvars}
+
+def mk_env_t(pvars):
+    return {v: Int(v + '_') for v in pvars}
+
+def upd(d, k, v):
+    d = d.copy()
+    d[k] = v
+    return d
+
+
+def eval_expr(env, expr):
+    if expr.root == 'id':
+        return env[expr.subtrees[0].root]
+    elif expr.root == 'num':
+        return expr.subtrees[0].root
+    elif expr.root in ['+', '-', '*', '/', '!=', '>', '<', '<=', '>=', '=']:
+        return OP[expr.root](eval_expr(env, expr.subtrees[0]), eval_expr(env, expr.subtrees[1]))
+    else:
+        raise ValueError("Unknown expression: " + expr)
+
+
+def verify(P, ast, Q, linv=None):
+    """
+    Verifies a Hoare triple {P} c {Q}
+    Where P, Q are assertions (see below for examples)
+    and ast is the AST of the command c.
+    Returns `True` iff the triple is valid.
+    Also prints the counterexample (model) returned from Z3 in case
+    it is not.
+    """
+    pvars = set(v for v in ast.terminals if isinstance(v, str))
+    print("pvars = ", pvars)
+    solver = Solver()
+    env = mk_env(pvars)
+    env['linv'] = linv
+    weakest_precondition = wp(ast, Q)
+    print("weakest_precondition = ", weakest_precondition(env))
+    solver.add(Not(Implies(P(env), wp(ast, Q)(env))))
+    if solver.check() == unsat:
+        return True
+    else:
+        print(solver.model())
+        return False
+
+
+def wp(c: Tree, Q: callable) -> callable:
+    """ maps a command c and a postcondition Q to the weakest precondition P that
+     will make the triple {P} c {Q} valid """
+    if c.root == 'skip':
+        return Q
+    elif c.root == ':=':
+        assert c.subtrees[0].root == 'id'
+        left_hand = c.subtrees[0].subtrees[0].root
+        return lambda env: Q(upd(env, left_hand, eval_expr(env, c.subtrees[1])))
+    elif c.root == ';':
+        return wp(c.subtrees[0], wp(c.subtrees[1], Q))
+    elif c.root == 'if':
+        return lambda env: Or(And(eval_expr(env, c.subtrees[0]), wp(c.subtrees[1], Q)(env)), And(Not(eval_expr(env, c.subtrees[0])), wp(c.subtrees[2], Q)(env)))
+    elif c.root == 'while':
+        # we assume that the invariant is given at env['linv'] and env['linv'] is a callable
+        def helper(env):
+            pvars = env.keys()
+            env_t = mk_env_t(pvars)
+            return And(env['linv'](env),
+                          And(Implies(And(env['linv'](env_t), eval_expr(env_t, c.subtrees[0])), wp(c.subtrees[1], env['linv'])(env_t)),
+                                      Implies(And(env['linv'](env_t), Not(eval_expr(env_t, c.subtrees[0]))), Q(env_t))))
+        return helper
+        # return lambda env: And(env['linv'](env),
+        #                               And(Implies(And(env['linv'](env_t), eval_expr(env_t, c.subtrees[0])), wp(c.subtrees[1], env['linv'])(env_t)),
+        #                                        Implies(And(env['linv'](env_t), Not(eval_expr(env_t, c.subtrees[0]))), Q(env_t))))
+    else:
+        raise Exception("Unknown command: {c}".format(c=c))
+
+
+if __name__ == '__main__':
+
+
+    pvars = ['a', 'b', 'i', 'n']
+    program = "a := b ; while i < n do ( a := a + 1 ; b := b + 1 )"
+    P = lambda _: True
+    Q = lambda d: d['a'] == d['b']
+    linv = lambda d: d['a'] == d['b']
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is True
+
+
+    #
+    # Following are other programs that you might want to try
+    #
+
+    ## Program 1
+    pvars = ['x', 'i', 'y']
+    program = "y := 0 ; while y < i do ( x := x + y ; if (x * y) < 10 then y := y + 1 else skip )"
+    P = lambda d: d['x'] > 0
+    Q = lambda d: d['x'] > 0
+    linv = lambda d: And (d['x'] > 0, d['y'] >= 0)
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is True
+
+
+    ## Program 2
+    program = "x := 0 ; y := 0 ; z := 0 ; while x < 10 do ( x := x + 1 ; y := y + 1 ; z := z + 1 )"
+    P = lambda d: d['x'] == 0 and d['y'] == 0 and d['z'] == 0
+    Q = lambda d: d['x'] == 10 and d['y'] == 10 and d['z'] == 10
+    linv = lambda d: d['x'] <= 10
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is True
+
+    ## Program 4
+    program = "while a != b do if a > b then a := a - b else b := b - a"
+    P = lambda d: And(d['a'] > 0, d['b'] > 0)
+    Q = lambda d: And(d['a'] > 0, d['a'] == d['b'])
+    linv = lambda d: And(d['a'] > 0, d['b'] > 0)
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is True
+
+
+    ## Program 5
+    pvars = ['x', 'y']
+    program = "x := 0 ; y := 0 ; while x < 10 do ( x := x + 1 ; y := y + 1 )"
+    P = lambda d: And(d['x'] == 0, d['y'] > 0)
+    Q = lambda d: And(d['x'] == 10, d['y'] == 10)
+    linv = lambda d: And(d['x'] >= 0, d['y'] >= 0)
+    ast = WhileParser()(program)
+    print(ast)
+    assert verify(P, ast, Q, linv=linv) is False
+
+    ## Program 6
+    program = " while x < 10 do ( x := x + 1 ; y := y + 1 )"
+    P = lambda d: True
+    Q = lambda d: And(d['x'] == 10, d['y'] == 12)
+    linv = lambda d: And(d['x'] >= 0, d['y'] >= 0)
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is False
+
+
+    ## Program 7
+    program = "x := 0 ; y := 3 ; while x < 10 do ( x := x + 1 ; y := y + 1 )"
+    P = lambda d: d['x'] == 0
+    Q = lambda d: And(d['x'] == 10, d['y'] == 2)
+    linv = lambda d: And(d['x'] >= 0, d['y'] >= 0)
+    ast = WhileParser()(program)
+    assert verify(P, ast, Q, linv=linv) is False
+    exit(0)
+
+
+    ast = WhileParser()(program)
+
+    if ast:
+        print(">> Valid program.")
+        # Your task is to implement "verify"
+        verify(P, ast, Q, linv=linv)
+    else:
+        print(">> Invalid program.")

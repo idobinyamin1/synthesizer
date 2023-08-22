@@ -1,74 +1,67 @@
 
-def test1():
+def test():
 
-    # feature2
+    # feature
 
-    # basic test
-    input = "y := ?? ; assert y == 10;"
-    output = "y := 10 ;"
+    # basic test input is x and output is y in the format of (x,y)
+    examples = ((1,1), (2,2), (3,3))
+    input = "y := ?? ;"
+    output = "y := x ;"
 
     # simple arithmetic
-    input = "x := 5 ; y := x + ?? ; assert y == 10;"
+    examples = ((1,6), (2,7), (5,10))
+    input = "y := x + ?? ;"
     output = "x := 5 ; y := x + 5"
 
-
-    # simple arithmetic with dependency between variables in the assert
-    input = "y := x * ?? ; assert y == x * 2;"
-    output = "y := x * 2 ;"
-
-    input = "y := x * c1 ; assert y == x * 2;"
-    #(forall x,y : exits c1 : y := x * c1 -> y == x * 2;)
-
-    input = "y := x * ?? ; assert y == x + x;"
+    examples = ((1,2), (2,4), (5,10))
+    input = "y := x * ?? ;"
     output = "y := x * 2 ;"
 
 
     # multiple variables and arithmetic
-    input = " x := 3 ; z := 2 ; t := x + z ; y := x - z + t + ?? ; assert y == 10;"
-    output = "x := 3 ; z := 2 ; t := x + z ; y := x - z + t + 6"
-
-    # simple arithmetic with < and >
-    input = "y := x + ?? ; assert y > x;"
-    output = "y := x + 1 ;"  # could any number that is greater than 1
+    examples = ((1,3), (4,9), (5,11), (6,13)) # should be y = 2x + 1
+    input = " z := 2 ; t := x + z ; y := x - z + t + ?? ; assert y == 10;" # y = x - 2 +x + 2 = 2x + ??
+    output = "x := 3 ; z := 2 ; t := x + z ; y := x - z + t + 1"
 
 
     # if condition 1 - hole in the beginning
-    input = "y := 0 ; x := ?? ; if x == 5 then ( y := 10 ) ; assert y == 10;"
-    output = "y := 0 ; x := 5 ; if x == 5 then ( y := 10 ) ;"
+    examples = ( (5,10), (1,2), (2,2) )
+    input = "y := ?? ; if x == 5 then ( y := 10 ) ;"
+    output = "y := 2 ; if x == 5 then ( y := 10 ) ;"
 
     # if condition 2 - hole in the condition body
-    input = "y := 10  ; if x == 5 then ( y := ?? ) ; assert y == 10;"
+    input = "y := 10  ; if x == 5 then ( y := ?? ) ;"
     output = "y := 10  ; if x == 5 then ( y := 10 ) ;"
-
-    # if condition 3 - hole inside the condition body
-    input = "y := 0 ; x = 5 ; if x == ?? then ( y := 10 ) ; assert y == 10;"
 
 
     # if else
-    input = "y := 0 ; x := ?? ; if x == 5 then ( y := 10 ) else ( y := 20 ) ; assert y == 10;"
+    examples = ((5,10), (1,20), (2,20))
+    input = " if x == 5 then ( y := ?? ) else ( y := 20 ) ;"
+    output = " if x == 5 then ( y := 10 ) else ( y := 20 ) ;"
 
 
     # loops : hole at the beginning
-    input = " x := 0 ; t := ??;  while x < t do ( y := y + 1 )  ; assert y == 10"
-    output = " x := 0 ; t := 10;  while x < t do ( y := y + 1 )  ; assert y == 10"
+    examples = ((1,1), (2,2), (3,3))
+    input = " y := 0;  while y < x do ( y := y + ?? )  ; "
+    output = " y := 0;  while y < x do ( y := y + 1 )  ; "
 
     # loops : hole at the while condition
-    input = " x := 0 ; while x < ?? do ( y := y + 1 )  ; assert y == 10"
-    output = " x := 0 ; while x < 10 do ( y := y + 1 )  ; assert y == 10"
-
-    # loops : hole at the while body
-    input = " x := 0 ; while x < 10 do ( y := y + ?? )  ; assert y == 10"
-    output = " x := 0 ; while x < 10 do ( y := y + 1 )  ; assert y == 10"
+    examples = ((1,1), (2,2), (3,3))
+    input = " y := ?? ; while y < x do ( y := y + 1 )  ; "
+    output = " y := 0;  while y < x do ( y := y + 1 )  ; "
 
     # multiple holes
-    input = " x := 0 ; y := 0 ; while x < ?? do ( y := y + ?? )  ; assert y == 10"
-    output = " x := 0 ; y := 0 ; while x < 10 do ( y := y + 1 )  ; assert y == 10"
+    examples = ((1,4), (2,3), (3,2))
+    input = " y := 0 ; while x < ?? do ( y := y + ?? )  ; "
+    output = "  y := 0 ; while x < 5 do ( y := y + 1 ) ;"
 
     # multiple holes 2
-    input = " x := ?? ; z := ?? ; y := x + z ; assert y == 10"
-    output = " x := 5 ; z := 5 ; y := x + z ; assert y == 10"  # x and z can be any numbers that adds up to 10
+    examples = ((1,6), (2,7), (3,8))
+    input = " z := ?? ; y := x + z ; "
+    output = " z := 5 ; y := x + z ;"
 
 
     # multiple holes 3
-    input = "y := 0 ; x := ?? ; if x == 5 then ( y := y + ?? ) else ( y := 20 ) ; assert y == 10;"
-    output = "y := 0 ; x := 5 ; if x == 5 then ( y := y + 10 ) else ( y := 20 ) ; assert y == 10;"
+    examples = ((5,10), (1,20), (2,20))
+    input = "y := 0 ; if x == 5 then ( y := ?? ) else ( y := ?? ) ;"
+    output = "y := 0 ; if x == 5 then ( y := 10 ) else ( y := 20 ) ;"

@@ -24,8 +24,8 @@ def test1():
 
 
     # multiple variables and arithmetic
-    input = " x := 3 ; z := 2 ; t := x + z ; y := x - z + t + ?? ; assert y == 10;"
-    output = "x := 3 ; z := 2 ; t := x + z ; y := x - z + t + 6"
+    input = " x := 3 ; z := 2 ; t := x + z ; y := t + ?? ; assert y == 10;"
+    output = "x := 3 ; z := 2 ; t := x + z ; y := x + 5"
 
     # simple arithmetic with < and >
     input = "y := x + ?? ; assert y > x;"
